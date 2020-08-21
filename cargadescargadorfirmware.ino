@@ -26,10 +26,11 @@ Adafruit_SSD1306 display(OLED_RESET);
 #define LOAD_ACTIVATE PB11
 #define MAX_CURRENT 2
 
-float idetCurrent=1;
-float chargecurrent=0.5;
+float idetCurrent=0.1;
+float chargeCurrent=1;
 
 SPIClass POT(2);
+
 void setup() {
   pinMode(LOAD_ACTIVATE, OUTPUT);
 
@@ -44,7 +45,8 @@ void setup() {
   pinMode(POT_CLK, OUTPUT);
   pinMode(POT_MOSI, OUTPUT);
 
-  digitalWrite(CHARGER_ENABLE,HIGH);
+  digitalWrite(LOAD_ACTIVATE,LOW);//turn off mosfet
+  digitalWrite(CHARGER_ENABLE,HIGH);//Shutdown charger
   digitalWrite(POT_RESET,HIGH); //NO RESET
 
 
@@ -68,13 +70,16 @@ void loop() {
 }
 
 bool setIdet(float current){
-	if (current>MAX_CURRENT || current>=chargecurrent){
+	float resistance=110.9895/current; //from datasheet
+	if (current>MAX_CURRENT || current>=chargecurrent || resistance<200){
 		return 1;  //idet cannot be larger than charge current or even larger than the max current
+		//also pot cannot go lower than 200
 	}
 	else{
 		idetCurrent=current;
-		float resistance=1109.895/current;
-		uint8_t data=mapfloat(resistance,200,1200,255,0);
+		
+		//uint8_t data=mapfloat(resistance,200,1200,255,0);
+		uint8_t data=(resistance - 200) * (0 - 255) / (1200 - 200) + 255;
 		digitalWrite(POT_CS, LOW);
 		POT.transfer(0x00);
 		POT.transfer(data);
@@ -83,6 +88,25 @@ bool setIdet(float current){
 	}
 	
 }
-float mapfloat(float x, float in_min, float in_max, float out_min, float out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+
+bool setChargeCurrent(float current){
+	float resistance=1109.895/current;//from datasheet
+	if (current>MAX_CURRENT || resistance<200){
+		return 1;  //charge current cannot be larger than the max current
+		//also pot cannot go lower than 200
+	}
+	else{
+		chargeCurrent=current;
+		
+		//uint8_t data=map(resistance,200,1200,255,0);
+		uint8_t data=(resistance - 200) * (0 - 255) / (1200 - 200) + 255;
+		digitalWrite(POT_CS, LOW);
+		POT.transfer(0x01);
+		POT.transfer(data);
+		digitalWrite(POT_CS, HIGH);
+		return 0;
+	}
+
+
+	
 }
