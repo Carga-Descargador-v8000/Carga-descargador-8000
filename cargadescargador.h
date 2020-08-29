@@ -16,15 +16,11 @@
 	#define CHARGER_ALERT PA10
 	#define CHARGER_ENABLE PB3
 
-	#ifdef  LTC4001
-		#define CHARGER_ON LOW
-		#define CHARGER_OFF HIGH
-	#endif  //LTC
 	
-	#ifdef  TP4056
-		#define CHARGER_ON HIGH
-		#define CHARGER_OFF LOW
-	#endif  //LTC
+	#define CHARGER_ON LOW
+	#define CHARGER_OFF HIGH
+	
+
 
 	#define CHARGER_OUT PB1
 	#define CHARGER_IN PA15
@@ -47,7 +43,7 @@
 	#define RepCap_Reg			0x05
 	#define FullCapRep_Reg		0x10
 	#define VCell_Reg			0x09
-	#define Current_reg			0x09
+	#define Current_reg			0x0A
 
 	class MAX17260{
 	

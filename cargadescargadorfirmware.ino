@@ -1,4 +1,4 @@
-#define TP4056
+
 #include "cargadescargador.h"
 /////////////////////////
 struct DPOT{
@@ -166,7 +166,7 @@ bool setMode(uint8_t _mode){
 			digitalpot.chargeCurrent=current;
 			
 			//uint8_t data=map(resistance,200,1200,255,0);
-			uint8_t data=map(digitalpot.progresistance,200,1000,0,255);
+			uint8_t data=map(digitalpot.progresistance,200,10000,0,255);
 			digitalWrite(POT_CS, LOW);
 			POT.transfer(0x01);
 			POT.transfer(data);
@@ -184,7 +184,7 @@ bool setMode(uint8_t _mode){
 		else{
 			digitalpot.idetCurrent=current;
 			
-			uint8_t data=map(digitalpot.idetresistance,200,1000,255,0);
+			uint8_t data=map(digitalpot.idetresistance,200,10000,255,0);
 			digitalWrite(POT_CS, LOW);
 			POT.transfer(0x00);
 			POT.transfer(data);
