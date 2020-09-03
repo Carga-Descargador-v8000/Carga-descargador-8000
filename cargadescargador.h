@@ -87,6 +87,17 @@
 		uint8_t  deviceAddress=FUEL_GAUGE_ADD;	
 	};
 
+	class device{
+
+	};
+
+	struct DPOT{
+	float idetCurrent=0.075;
+	float chargeCurrent=0.750;
+	int progresistance;
+	int idetresistance;
+	};
+
 
 
 

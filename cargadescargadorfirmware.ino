@@ -1,20 +1,18 @@
-
+#include <SPI.h>
 #include "cargadescargador.h"
+
 /////////////////////////
-struct DPOT{
-	float idetCurrent=0.250;
-	float chargeCurrent=1.0;
-	int progresistance;
-	int idetresistance;
-}digitalpot;
+
 	
 	Adafruit_SSD1306 display(OLED_RESET);
 	MAX17260 fuelgauge;
 	SPIClass POT(2);
-	
-bool battery_present=0;
-uint8_t mode=0;
+	DPOT digitalpot;
 
+
+bool battery_present=0;
+uint8_t mode='0';
+//uint8_t test=0;
 
 
 
@@ -23,21 +21,28 @@ void setup() {
   pinsetup();
 
   digitalWrite(LOAD_ACTIVATE,LOW);//turn off mosfet
-  digitalWrite(CHARGER_ENABLE,HIGH);//Shutdown charger
+  digitalWrite(CHARGER_ENABLE,CHARGER_OFF);//Shutdown charger
   digitalWrite(POT_RESET,HIGH); //NO RESET
 
   //group alll the begins
   
-  POT.begin();//Initialize the SPI_2 port.
+  
   Wire.begin();
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   configdisplay();
+  POT.begin();//Initialize the SPI_2 port.
   POT.setBitOrder(MSBFIRST); // Set the SPI_2 bit order
-  POT.setDataMode(SPI_MODE0); //Set the  SPI_2 data mode 0
+  POT.setDataMode(SPI_MODE0); //Set the  SPI_2 data mode 1
+  POT.setClockDivider(SPI_CLOCK_DIV16);
+  
   Serial.begin(9600);
   setMode(mode);
    
-  
+   if(setChargeCurrent(digitalpot.chargeCurrent)){ //initialize the digital pot with default values
+  	display.println("error current set");
+  	display.display();
+  	while(1); //error handler
+  }
 
   if(setIdet(digitalpot.idetCurrent)){ //initialize the digital pot with default values
   	display.println("error idet set");
@@ -45,16 +50,12 @@ void setup() {
   	while(1); //error handler
   }
 
-  if(setChargeCurrent(digitalpot.chargeCurrent)){ //initialize the digital pot with default values
-  	display.println("error idet set");
-  	display.display();
-  	while(1); //error handler
-  }
+
 
   if(fuelgauge.isAlive()){  //check if battery is present
   	battery_present=1;
   	if(fuelgauge.checkPOR()){
-  		fuelgauge.setup(1500,100,3.0,3.1);
+  		fuelgauge.setup(1500,75,3.0,3.1);
   	}
   }else{
   	battery_present=0;
@@ -64,67 +65,125 @@ void setup() {
 
   display.println("All ok");
   display.display();
+  delay(1000);
  
 }
 
 void loop() {
-	display.clearDisplay();
-	display.setCursor(0,0);
+
 	if(fuelgauge.isAlive()){  //check if battery is present
 		while (Serial.available()){
 		setMode(Serial.read());
 		}
-  	battery_present=1;
+  		battery_present=1;
 	  	if(fuelgauge.checkPOR()){
-	  		fuelgauge.setup(1500,100,3.0,3.1);//reinitialize if the fuelgauge has been reset
+	  		fuelgauge.setup(1500,75,3.0,3.1);//reinitialize if the fuelgauge has been reset
 	  	}
-
 	  	fuelgauge.poll();  //update values
+	  	/*display and clear display are strategically separated by the time we use doing things
+	  	like polling the fuel gauge and doing other checks that dont involve manipulating the 
+	  	frame buffer*/
+		
+	    display.clearDisplay(); 
+		display.setCursor(0,0);
+
+	  	
 	  	display.println("Battery present");
+	  	printMode(mode);
 	  	display.print(fuelgauge.remainingCapacity);
 	  	display.println(" mah");
 	  	display.print(fuelgauge.reportedSOC);
 	  	display.println("%");
-	  	display.print(fuelgauge.cellVoltage);
+	  	display.print(fuelgauge.cellVoltage,5);
 	  	display.println(" V");
-	  	display.print(fuelgauge.Current);
+	  	display.print(fuelgauge.Current,5);
 	  	display.println(" A");
+	  	display.println(millis());
+	  	if((millis()%5000)<=100){		
+	  		Serial.print(fuelgauge.Current,5);
+	  		Serial.print(",");
+	  		Serial.print(fuelgauge.cellVoltage,5);
+	  		Serial.print(",");
+	  		Serial.println(4.2);
+
+	  	}
+
 	}
 	else{
+		display.clearDisplay(); 
+		display.setCursor(0,0);
 	  	battery_present=0;
 		display.println("battery detached");
 	}
 
+	//////////////////this is a resistor test/////////////////////////
+	
+	/*if(Serial.available()>0){
+		uint8_t temp_test=Serial.parseInt();
+		if(temp_test!=0){
+			test=temp_test;
+		}
+	}
+	digitalWrite(POT_CS, LOW);
+	POT.transfer(0x00);
+	POT.transfer(test);
+	digitalWrite(POT_CS, HIGH);
+
+	digitalWrite(POT_CS, LOW);
+	POT.transfer(0x01);
+	POT.transfer(test);
+	digitalWrite(POT_CS, HIGH);
+
+	display.clearDisplay();
+	display.setCursor(0,0);
+	display.print(test);*/
 	display.display();
-	delay(100);
 
 }
 
 
 
-bool setMode(uint8_t _mode){
+void setMode(uint8_t _mode){
 		mode=_mode;
 	  	switch(_mode){
 	  	case'0':{
-  			display.print("Standby");
   			digitalWrite(LOAD_ACTIVATE, LOW);
-  			digitalWrite(CHARGER_ENABLE,CHARGER_OFF);
+  			digitalWrite(CHARGER_ENABLE,CHARGER_OFF);//standby
   			break;
   		}
 
   		case'1':{
-  			display.print("charging");
   			digitalWrite(LOAD_ACTIVATE, LOW);
 	  		delay(1);
-	  		digitalWrite(CHARGER_ENABLE,CHARGER_ON);
+	  		digitalWrite(CHARGER_ENABLE,CHARGER_ON);//charging
 	  		break;		
   		}
   		
   		case'2':{
-  			display.print("discharging");
-	  		digitalWrite(CHARGER_ENABLE,CHARGER_OFF);
+	  		digitalWrite(CHARGER_ENABLE,CHARGER_OFF);//discharging
 	  		delay(1);
 	  		digitalWrite(LOAD_ACTIVATE, HIGH);
+  			break;
+  		}
+
+  	}
+
+}
+
+void printMode(uint8_t _mode){
+	switch(_mode){
+	  	case'0':{
+  			display.println("Standby");
+  			break;
+  		}
+
+  		case'1':{
+  			display.println("charging");
+	  		break;		
+  		}
+  		
+  		case'2':{
+  			display.println("discharging");
   			break;
   		}
 
@@ -148,25 +207,27 @@ bool setMode(uint8_t _mode){
 	  pinMode(CHARGER_ENABLE, OUTPUT);
 	  pinMode(CHARGER_FAULT, INPUT);
 
-	  pinMode(POT_CS,OUTPUT);
+	  
 	  pinMode(POT_RESET,OUTPUT);
-	  pinMode(POT_CLK, OUTPUT);
-	  pinMode(POT_MOSI, OUTPUT);
+	  pinMode(POT_CS,OUTPUT);
+	  digitalWrite(POT_CS, HIGH);
+	 // pinMode(POT_CLK, OUTPUT);
+	 // pinMode(POT_MOSI, OUTPUT);
 	  pinMode(CHARGER_ALERT, INPUT);
 	  pinMode(PC13,OUTPUT);
 	}
 
 	bool setChargeCurrent(float current){
-		digitalpot.progresistance=1109.895/current;//from datasheet
-		if (current>MAX_CURRENT || digitalpot.progresistance<200){
+		int temp=1109.895f/current;
+		//from datasheet
+		if (current>MAX_CURRENT || temp<89){
 			return 1;  //charge current cannot be larger than the max current
-			//also pot cannot go lower than 200
+			//also pot cannot go lower than 89
 		}
 		else{
+			digitalpot.progresistance=temp;
 			digitalpot.chargeCurrent=current;
-			
-			//uint8_t data=map(resistance,200,1200,255,0);
-			uint8_t data=map(digitalpot.progresistance,200,10000,0,255);
+			uint8_t data=-0.0272f*digitalpot.progresistance + 256.09f;;
 			digitalWrite(POT_CS, LOW);
 			POT.transfer(0x01);
 			POT.transfer(data);
@@ -176,15 +237,16 @@ bool setMode(uint8_t _mode){
 	}
 
 	bool setIdet(float current){
-		digitalpot.idetresistance=110.9895f/current; //from datasheet
-		if (current>MAX_CURRENT || current>=digitalpot.chargeCurrent || digitalpot.idetresistance<200){
+		int temp=110.9895f/current; //from datasheet
+		if (current>MAX_CURRENT || current>=digitalpot.chargeCurrent || temp<89){
 			return 1;  //idet cannot be larger than charge current or even larger than the max current
 			//also pot cannot go lower than 200
 		}
 		else{
+			digitalpot.idetresistance=temp;
 			digitalpot.idetCurrent=current;
 			
-			uint8_t data=map(digitalpot.idetresistance,200,10000,255,0);
+			uint8_t data= -0.0272f*digitalpot.idetresistance + 256.09f;//calculated from table in datasheet
 			digitalWrite(POT_CS, LOW);
 			POT.transfer(0x00);
 			POT.transfer(data);
